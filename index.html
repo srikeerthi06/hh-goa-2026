@@ -940,7 +940,14 @@
       const file = new File([blob], filename, { type: 'image/png' });
 
       // ---- Path 1: native share sheet with the actual image file ----
+      // Only attempt this on phones/tablets. On desktop (Windows/Mac),
+      // the OS share sheet only lists apps registered as share targets —
+      // X does not have a desktop app that registers itself that way, so
+      // it can never appear there and trying just confuses people.
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
       const canNativeShare =
+        isMobile &&
         typeof navigator.share === 'function' &&
         typeof navigator.canShare === 'function' &&
         navigator.canShare({ files: [file] });
