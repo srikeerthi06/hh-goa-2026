@@ -1,0 +1,8 @@
+{
+  "name": "hh-goa-2026-builder-card",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^10.7.11"
+  }
+}

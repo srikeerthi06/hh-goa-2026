@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+  command = "npm install --omit=dev"
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/share/:id"
+  to = "/.netlify/functions/share?id=:id"
+  status = 200
+  force = true
