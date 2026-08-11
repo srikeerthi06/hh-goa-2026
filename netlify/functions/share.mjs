@@ -16,14 +16,24 @@ function createId() {
   return crypto.randomUUID();
 }
 
+/*
+ * Accept both:
+ *
+ * /share/UUID
+ *
+ * and:
+ *
+ * /.netlify/functions/share?id=UUID
+ */
 function getShareId(url) {
-  // 1. Normal query-string form:
-  // /.netlify/functions/share?id=UUID
+  // Query-string version
   const queryId = url.searchParams.get("id");
-  if (queryId) return queryId.trim();
 
-  // 2. Pretty public form:
-  // /share/UUID
+  if (queryId) {
+    return queryId.trim();
+  }
+
+  // Pretty public URL version
   const match = url.pathname.match(/^\/share\/([^/?#]+)\/?$/);
 
   if (match) {
@@ -36,40 +46,59 @@ function getShareId(url) {
 export default async (req) => {
   const url = new URL(req.url);
 
-  // ============================================================
-  // CREATE SHARE
-  // POST /.netlify/functions/share
-  // ============================================================
+  /*
+   * ============================================================
+   * CREATE SHARE
+   * POST /.netlify/functions/share
+   * ============================================================
+   */
+
   if (req.method === "POST") {
     try {
       const body = await req.json();
 
       if (!body.image || typeof body.image !== "string") {
         return new Response("Image is required.", {
-          status: 400
+          status: 400,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8"
+          }
         });
       }
 
-      // Only accept PNG data URLs.
+      /*
+       * Expect the generated Builder Card
+       * as a PNG data URL.
+       */
       const match = body.image.match(
         /^data:image\/png;base64,(.+)$/i
       );
 
       if (!match) {
         return new Response("Invalid PNG image.", {
-          status: 400
+          status: 400,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8"
+          }
         });
       }
 
-      // Convert base64 PNG to bytes.
+      /*
+       * Convert Base64 PNG into binary data.
+       */
       const imageBytes = Uint8Array.from(
         atob(match[1]),
         (char) => char.charCodeAt(0)
       );
 
+      /*
+       * Create unique share ID.
+       */
       const id = createId();
 
-      // Store the generated card.
+      /*
+       * Store the actual Builder Card.
+       */
       await store.set(id, imageBytes, {
         metadata: {
           caption: String(body.caption || "").slice(0, 1000),
@@ -77,31 +106,38 @@ export default async (req) => {
         }
       });
 
-      // IMPORTANT:
-      // Return the pretty public URL.
+      /*
+       * Return public share URL.
+       */
       return Response.json({
         id,
         url: `${url.origin}/share/${id}`
       });
 
     } catch (error) {
-      console.error("Share creation error:", error);
+      console.error(
+        "Share creation error:",
+        error
+      );
 
       return new Response(
         "Could not create share link.",
         {
           status: 500,
           headers: {
-            "Content-Type": "text/plain; charset=utf-8"
+            "Content-Type":
+              "text/plain; charset=utf-8"
           }
         }
       );
     }
   }
 
-  // ============================================================
-  // READ SHARE
-  // ============================================================
+  /*
+   * ============================================================
+   * READ SHARE
+   * ============================================================
+   */
 
   const id = getShareId(url);
 
@@ -109,69 +145,101 @@ export default async (req) => {
     return new Response("Not found.", {
       status: 404,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8"
+        "Content-Type":
+          "text/plain; charset=utf-8"
       }
     });
   }
 
   try {
-    // Get image + metadata from Netlify Blobs.
+    /*
+     * IMPORTANT:
+     *
+     * Use STRONG consistency.
+     *
+     * This makes a newly-created card immediately
+     * available when the user opens the share URL.
+     */
     const result = await store.getWithMetadata(id, {
-      type: "arrayBuffer"
+      type: "arrayBuffer",
+      consistency: "strong"
     });
 
+    /*
+     * Card does not exist.
+     */
     if (!result || !result.data) {
-      return new Response("Share card not found.", {
-        status: 404,
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8"
+      return new Response(
+        "Share card not found.",
+        {
+          status: 404,
+          headers: {
+            "Content-Type":
+              "text/plain; charset=utf-8"
+          }
         }
-      });
+      );
     }
 
     const imageData = result.data;
 
+    /*
+     * Get caption saved during card creation.
+     */
     const caption = escapeHtml(
       result.metadata?.caption ||
       "🌴 Built my Hacker House Goa 2026 Builder Card! 🌴\n\n#FrameInGoa #HHGoa2026"
     );
 
-    // ============================================================
-    // DIRECT IMAGE
-    //
-    // /share/UUID?image=1
-    // ============================================================
+    /*
+     * ============================================================
+     * DIRECT IMAGE
+     *
+     * /.netlify/functions/share?id=UUID&image=1
+     * ============================================================
+     */
 
     if (url.searchParams.get("image") === "1") {
       return new Response(imageData, {
         status: 200,
         headers: {
           "Content-Type": "image/png",
-          "Cache-Control": "public, max-age=31536000, immutable"
+
+          /*
+           * Allow X and other crawlers to cache the image.
+           */
+          "Cache-Control":
+            "public, max-age=31536000, immutable"
         }
       });
     }
 
-    // ============================================================
-    // IMAGE URL
-    //
-    // This is what X/Twitter uses for the preview.
-    // ============================================================
+    /*
+     * ============================================================
+     * IMAGE URL FOR SOCIAL MEDIA
+     * ============================================================
+     */
 
     const imageUrl =
       `${url.origin}/.netlify/functions/share` +
-      `?id=${encodeURIComponent(id)}&image=1`;
+      `?id=${encodeURIComponent(id)}` +
+      `&image=1`;
 
-    // Public share URL.
+    /*
+     * Public share page.
+     */
     const publicShareUrl =
       `${url.origin}/share/${encodeURIComponent(id)}`;
 
-    // ============================================================
-    // HTML SHARE PAGE
-    // ============================================================
+    /*
+     * ============================================================
+     * SHARE PAGE
+     * ============================================================
+     */
 
     const html = `<!DOCTYPE html>
 <html lang="en">
+
 <head>
 
 <meta charset="UTF-8">
@@ -181,16 +249,19 @@ export default async (req) => {
   content="width=device-width, initial-scale=1.0"
 >
 
-<title>Hacker House Goa 2026 Builder Card</title>
+<title>
+  Hacker House Goa 2026 Builder Card
+</title>
 
 <meta
   name="description"
   content="${caption.replace(/\n/g, " ")}"
 >
 
-<!-- =========================================================
+
+<!-- ==========================================================
      OPEN GRAPH
-     ========================================================= -->
+     ========================================================== -->
 
 <meta
   property="og:title"
@@ -227,9 +298,10 @@ export default async (req) => {
   content="Hacker House Goa 2026 Builder Card"
 >
 
-<!-- =========================================================
+
+<!-- ==========================================================
      TWITTER / X
-     ========================================================= -->
+     ========================================================== -->
 
 <meta
   name="twitter:card"
@@ -255,6 +327,7 @@ export default async (req) => {
   name="twitter:image:alt"
   content="Hacker House Goa 2026 Builder Card"
 >
+
 
 <style>
 
@@ -381,6 +454,7 @@ h1 {
 
 </head>
 
+
 <body>
 
 <main>
@@ -396,7 +470,9 @@ h1 {
       Hacker House Goa 2026 Builder Card
     </h1>
 
-    <p class="caption">${caption}</p>
+    <p class="caption">
+      ${caption}
+    </p>
 
     <a
       class="open"
@@ -412,14 +488,18 @@ h1 {
 </main>
 
 </body>
+
 </html>`;
 
+    /*
+     * Return the share page.
+     */
     return new Response(html, {
       status: 200,
       headers: {
-        "Content-Type": "text/html; charset=utf-8",
+        "Content-Type":
+          "text/html; charset=utf-8",
 
-        // Let social crawlers fetch the page.
         "Cache-Control":
           "public, max-age=300"
       }
