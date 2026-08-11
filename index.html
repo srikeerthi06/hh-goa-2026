@@ -917,33 +917,34 @@
     }, 'image/png');
   };
 
-  // ---- Share to X ----
-  // The task requires either a real image attachment OR a public link whose
-  // X preview shows the generated graphic. We use the second path so it works
-  // consistently on desktop and mobile without requiring an X developer account.
+    // ---- Share to X ----
   shareBtn.onclick = () => {
     if(!state.img){
       showToast('Please upload a photo first');
       return;
     }
 
-    canvas.toBlob(async blob=>{
+    canvas.toBlob(async blob => {
       if(!blob){
         showToast('Could not create the image. Please try again.');
         return;
       }
+
       const caption = buildShareCaption();
 
-      try{
+      try {
         showToast('Preparing your share link…');
 
         const dataUrl = await blobToDataURL(blob);
+
         const response = await fetch('/.netlify/functions/share', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            image:dataUrl,
-            caption:caption
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            image: dataUrl,
+            caption: caption
           })
         });
 
@@ -953,34 +954,70 @@
         }
 
         const result = await response.json();
-        if(!result.url) throw new Error('No share URL returned');
 
-        // X receives both the caption and a public URL. The URL resolves to
-        // an HTML page containing og:image for the exact generated graphic.
-        const xUrl = 'https://x.com/intent/post?text=' +
+        if(!result.id){
+          throw new Error('No share ID returned');
+        }
+
+        /*
+         * IMPORTANT:
+         * Use the Netlify Function URL directly.
+         *
+         * This avoids depending on the /share/* rewrite
+         * when X fetches the preview.
+         */
+        const previewUrl =
+          window.location.origin +
+          '/.netlify/functions/share?id=' +
+          encodeURIComponent(result.id);
+
+        /*
+         * Open X with:
+         * 1. Caption
+         * 2. Public preview URL
+         */
+        const xUrl =
+          'https://x.com/intent/post?text=' +
           encodeURIComponent(caption) +
-          '&url=' + encodeURIComponent(result.url);
+          '&url=' +
+          encodeURIComponent(previewUrl);
 
-        window.open(xUrl, '_blank', 'noopener,noreferrer');
-        showToast('X composer opened with your card preview ✓');
-      }catch(err){
-        console.error(err);
-        // Never silently fail. Keep the user able to download the exact card.
-        showToast('Share link failed — use Download and post it manually');
-        setTimeout(()=>{
+        window.open(
+          xUrl,
+          '_blank',
+          'noopener,noreferrer'
+        );
+
+        showToast('X opened with your Builder Card link ✓');
+
+      } catch(err) {
+
+        console.error('Share error:', err);
+
+        showToast(
+          'Share failed — downloading your card instead'
+        );
+
+        setTimeout(() => {
           downloadBtn.click();
         }, 800);
       }
+
     }, 'image/png');
   };
 
+
   function blobToDataURL(blob){
-    return new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=reject;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(reader.result);
+
+      reader.onerror = reject;
+
       reader.readAsDataURL(blob);
     });
+  }
   }
 
   let toastTimer;
