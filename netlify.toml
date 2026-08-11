@@ -1,8 +1,13 @@
-[functions]
-  directory = "netlify/functions"
+[build]
+  publish = "."
+  functions = "netlify/functions"
 
 [[redirects]]
   from = "/share/*"
+  to = "/.netlify/functions/share?id=:splat"
+  status = 200
+
+[[redirects]]
+  from = "/share"
   to = "/.netlify/functions/share"
   status = 200
-  force = true
