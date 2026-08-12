@@ -4,10 +4,5 @@
 
 [[redirects]]
   from = "/share/*"
-  to = "/.netlify/functions/share?id=:splat"
-  status = 200
-
-[[redirects]]
-  from = "/share"
-  to = "/.netlify/functions/share"
+  to = "/.netlify/functions/share/:splat"
   status = 200
