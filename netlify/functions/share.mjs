@@ -25,10 +25,10 @@ function getPngDimensions(bytes) {
 export default async (req) => {
   const url = new URL(req.url);
   let id = url.searchParams.get("id");
-if (!id) {
-  const segments = url.pathname.split("/").filter(Boolean);
-  id = segments[segments.length - 1];
-}
+  if (!id) {
+    const segments = url.pathname.split("/").filter(Boolean);
+    id = segments[segments.length - 1];
+  }
 
   const store = getStore(STORE_NAME);
 
@@ -66,10 +66,10 @@ if (!id) {
         }
       });
 
-return Response.json({
-  url: `${url.origin}/.netlify/functions/share?id=${key}`,
-  id: key
-}, { {
+      return Response.json({
+        url: `${url.origin}/.netlify/functions/share?id=${key}`,
+        id: key
+      }, {
         headers: { "Cache-Control": "no-store" }
       });
     } catch (error) {
@@ -88,7 +88,7 @@ return Response.json({
     return new Response("This share link has expired or does not exist.", { status: 404 });
   }
 
-  const shareUrl = `${url.origin}/share/${encodeURIComponent(id)}`;
+  const shareUrl = `${url.origin}/.netlify/functions/share?id=${encodeURIComponent(id)}`;
   const imageUrl = `${url.origin}/.netlify/functions/share?id=${encodeURIComponent(id)}&image=1`;
   const caption = htmlEscape(entry.metadata?.caption || "Hacker House Goa 2026 #FrameInGoa");
 
