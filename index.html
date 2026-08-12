@@ -198,7 +198,7 @@
       <button class="btn btn-primary" id="shareBtn" disabled>Share to 𝕏</button>
     </div>
     <div class="caption-preview" id="captionPreview"></div>
-    <div class="hint" id="shareHint" style="margin-top:10px">Share to X opens a public preview of your generated card.</div>
+    <div class="hint" style="margin-top:10px">Share to X opens a public preview of your generated card.</div>
   </div>
 
   <footer>Built for HH Goa 2026 · tag <a href="https://x.com/search?q=%23FrameInGoa" target="_blank">#FrameInGoa</a> when you post</footer>
@@ -875,10 +875,6 @@
   if(document.fonts && document.fonts.ready){ document.fonts.ready.then(render); }
   setTimeout(render, 300);
 
-  function currentFilename(){
-    return state.format === 'pfp' ? 'hhgoa2026-pfp.png' : 'hhgoa2026-builder-id.png';
-  }
-
   // ---- Download ----
   downloadBtn.onclick = () => {
     if(!state.img){
@@ -893,7 +889,10 @@
         return;
       }
 
-      const filename = currentFilename();
+      const filename = state.format === 'pfp'
+        ? 'hhgoa2026-pfp.png'
+        : 'hhgoa2026-builder-id.png';
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
 
@@ -919,34 +918,33 @@
   };
 
   // ---- Share to X ----
-  // Uploads the generated card to the share function, which stores it and
-  // returns a public /share/<id> page with proper og:image (incl. width/
-  // height) so X renders a full "summary_large_image" card automatically.
-  // No manual attach step required — this is the flow that already
-  // worked correctly end-to-end.
+  // The task requires either a real image attachment OR a public link whose
+  // X preview shows the generated graphic. We use the second path so it works
+  // consistently on desktop and mobile without requiring an X developer account.
   shareBtn.onclick = () => {
     if(!state.img){
       showToast('Please upload a photo first');
       return;
     }
 
-    canvas.toBlob(async blob => {
+    canvas.toBlob(async blob=>{
       if(!blob){
         showToast('Could not create the image. Please try again.');
         return;
       }
-
       const caption = buildShareCaption();
 
-      try {
+      try{
         showToast('Preparing your share link…');
 
         const dataUrl = await blobToDataURL(blob);
-
         const response = await fetch('/.netlify/functions/share', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataUrl, caption: caption })
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            image:dataUrl,
+            caption:caption
+          })
         });
 
         if(!response.ok){
@@ -957,28 +955,30 @@
         const result = await response.json();
         if(!result.url) throw new Error('No share URL returned');
 
-        const xUrl =
-          'https://x.com/intent/post?text=' +
+        // X receives both the caption and a public URL. The URL resolves to
+        // an HTML page containing og:image for the exact generated graphic.
+        const xUrl = 'https://x.com/intent/post?text=' +
           encodeURIComponent(caption) +
-          '&url=' +
-          encodeURIComponent(result.url);
+          '&url=' + encodeURIComponent(result.url);
 
         window.open(xUrl, '_blank', 'noopener,noreferrer');
-        showToast('X opened with your Builder Card ✓');
-
-      } catch(err) {
-        console.error('Share error:', err);
+        showToast('X composer opened with your card preview ✓');
+      }catch(err){
+        console.error(err);
+        // Never silently fail. Keep the user able to download the exact card.
         showToast('Share link failed — use Download and post it manually');
-        setTimeout(() => { downloadBtn.click(); }, 800);
+        setTimeout(()=>{
+          downloadBtn.click();
+        }, 800);
       }
     }, 'image/png');
   };
 
   function blobToDataURL(blob){
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=reject;
       reader.readAsDataURL(blob);
     });
   }
@@ -988,7 +988,7 @@
     const t = document.getElementById('toast');
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>t.classList.remove('show'), 3200);
+    toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
   }
 })();
 </script>
