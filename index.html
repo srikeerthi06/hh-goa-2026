@@ -917,17 +917,74 @@
     }, 'image/png');
   };
 
+  // ---- Build a landscape "letterboxed" version of the card for link previews ----
+  // X (and most platforms) render og:image inside a ~1.91:1 landscape box and
+  // CROP whatever doesn't fit. Our card is tall/portrait (or square), so a
+  // direct crop cuts content off. Instead we draw the *entire* card, scaled
+  // to fit fully inside a themed 1200x630 canvas (no cropping), so the whole
+  // badge is always visible in the link preview — just with some background
+  // margin on the sides or top/bottom depending on the format.
+  function buildShareCanvas(){
+    const SHARE_W = 1200, SHARE_H = 630;
+    const shareCanvas = document.createElement('canvas');
+    shareCanvas.width = SHARE_W;
+    shareCanvas.height = SHARE_H;
+    const sctx = shareCanvas.getContext('2d');
+
+    // Themed background so the letterbox margin still looks intentional.
+    const bg = sctx.createLinearGradient(0, 0, SHARE_W, SHARE_H);
+    bg.addColorStop(0, '#0b1420');
+    bg.addColorStop(0.55, '#101d30');
+    bg.addColorStop(1, '#152034');
+    sctx.fillStyle = bg;
+    sctx.fillRect(0, 0, SHARE_W, SHARE_H);
+
+    // subtle dot grid to match the site's texture
+    sctx.save();
+    sctx.globalAlpha = 0.10;
+    for(let y = 20; y < SHARE_H; y += 26){
+      for(let x = 20; x < SHARE_W; x += 26){
+        sctx.fillStyle = '#f4e9d0';
+        sctx.fillRect(x, y, 1.4, 1.4);
+      }
+    }
+    sctx.restore();
+
+    // Contain-fit: scale the FULL card down until it fits entirely inside
+    // the share canvas, with a small margin — nothing gets cropped.
+    const margin = 0.92;
+    const scale = Math.min(SHARE_W / canvas.width, SHARE_H / canvas.height) * margin;
+    const dw = canvas.width * scale;
+    const dh = canvas.height * scale;
+    const dx = (SHARE_W - dw) / 2;
+    const dy = (SHARE_H - dh) / 2;
+
+    // soft shadow behind the card so it reads as a distinct object
+    sctx.save();
+    sctx.shadowColor = 'rgba(0,0,0,0.45)';
+    sctx.shadowBlur = 40;
+    sctx.shadowOffsetY = 12;
+    sctx.drawImage(canvas, dx, dy, dw, dh);
+    sctx.restore();
+
+    return shareCanvas;
+  }
+
   // ---- Share to X ----
   // The task requires either a real image attachment OR a public link whose
   // X preview shows the generated graphic. We use the second path so it works
   // consistently on desktop and mobile without requiring an X developer account.
+  // The image sent to the preview endpoint is the LETTERBOXED version above,
+  // so the full badge is always visible in the card — nothing gets cropped.
   shareBtn.onclick = () => {
     if(!state.img){
       showToast('Please upload a photo first');
       return;
     }
 
-    canvas.toBlob(async blob=>{
+    const shareCanvas = buildShareCanvas();
+
+    shareCanvas.toBlob(async blob=>{
       if(!blob){
         showToast('Could not create the image. Please try again.');
         return;
