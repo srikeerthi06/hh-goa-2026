@@ -24,7 +24,11 @@ function getPngDimensions(bytes) {
 
 export default async (req) => {
   const url = new URL(req.url);
-  const id = url.searchParams.get("id");
+  let id = url.searchParams.get("id");
+if (!id) {
+  const segments = url.pathname.split("/").filter(Boolean);
+  id = segments[segments.length - 1];
+}
 
   const store = getStore(STORE_NAME);
 
