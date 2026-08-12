@@ -66,10 +66,10 @@ if (!id) {
         }
       });
 
-      return Response.json({
-        url: `${url.origin}/share/${key}`,
-        id: key
-      }, {
+return Response.json({
+  url: `${url.origin}/.netlify/functions/share?id=${key}`,
+  id: key
+}, { {
         headers: { "Cache-Control": "no-store" }
       });
     } catch (error) {
